@@ -11,6 +11,7 @@ OpenClaw `2026.9.1` reorganized its Plugin SDK:
 - the bare `openclaw/plugin-sdk` entry point was **removed** from `package.json` `exports`
 - `openclaw/plugin-sdk/channel-runtime` was **renamed/merged** into `channel-message`
 - the plugin loader became stricter about module format: CJS files containing `import.meta` are now rejected
+- `PluginRuntime.config.loadConfig()` was **renamed** to `current()` — the plugin loads but every inbound message dies with `LarkClient.runtime.config.loadConfig is not a function`
 
 `@larksuite/openclaw-lark` (latest stable `2026.7.16`, and even the `2026.8.5-beta.0` whose published tarball is broken — `main`/`exports` point at a missing `dist/`) still relies on all three, so after upgrading OpenClaw the plugin fails to load and **every Feishu bot goes down**:
 
@@ -28,6 +29,7 @@ ReferenceError: exports is not defined in ES module scope
 | 1 | `openclaw/dist/plugin-sdk.js` (new file) | shim: `export * from "./plugin-sdk/core.js"` |
 | 2 | `openclaw/package.json` | add `exports` entries `./plugin-sdk` → shim, `./plugin-sdk/channel-runtime` → `dist/plugin-sdk/channel-message.js` |
 | 3 | installed lark plugin | rewrite `import.meta.url` → CJS `__dirname`/`__filename` in `src/core/version.js` and `src/core/token-store.js` |
+| 4 | installed lark plugin | alias `runtime.config.current()` → removed `runtime.config.loadConfig()` (in `index.js`, with fallback at both call sites) |
 
 No plugin features are touched — only module resolution.
 

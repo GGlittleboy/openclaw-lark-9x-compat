@@ -140,6 +140,52 @@ EOF
     say "token-store.js already patched"
   fi
 done
+
+# --- step 4: runtime API rename (loadConfig -> current in 2026.9) -------------
+for LARK in "$HOME"/.openclaw/npm/projects/*openclaw-lark*/node_modules/@larksuite/openclaw-lark; do
+  [[ -f "$LARK/index.js" ]] || continue
+  IDX="$LARK/index.js"
+  if grep -qF 'openclaw-lark-9x-compat: 2026.9 renamed' "$IDX"; then
+    say "index.js runtime alias already present"
+    continue
+  fi
+  cp "$IDX" "$IDX$BACKUP_SUFFIX"
+  node - "$IDX" <<'NODEEOF'
+const fs = require('fs');
+const p = process.argv[2];
+const old = "        lark_client_1.LarkClient.setRuntime(api.runtime);";
+const neu = `        // openclaw-lark-9x-compat: 2026.9 renamed runtime.config.loadConfig() -> runtime.config.current()
+        const __rt = api.runtime;
+        try {
+            if (__rt && __rt.config && typeof __rt.config.loadConfig !== 'function' && typeof __rt.config.current === 'function') {
+                __rt.config.loadConfig = () => __rt.config.current();
+            }
+        }
+        catch { /* host object not extensible; handled at call sites */ }
+        lark_client_1.LarkClient.setRuntime(__rt);`;
+const s = fs.readFileSync(p, 'utf8');
+if (!s.includes(old)) { console.error('[compat] ERROR: index.js setRuntime call site not found'); process.exit(1); }
+fs.writeFileSync(p, s.replace(old, neu));
+console.log('[compat] index.js patched (loadConfig -> current alias)');
+NODEEOF
+  for pair in     "/src/channel/monitor.js|return lark_client_1.LarkClient.runtime.config.loadConfig();|const __c = lark_client_1.LarkClient.runtime.config; return (typeof __c.loadConfig === 'function' ? __c.loadConfig() : __c.current());"     "/src/core/lark-client.js|const live = LarkClient.runtime.config.loadConfig();|const __c = LarkClient.runtime.config; const live = (typeof __c.loadConfig === 'function' ? __c.loadConfig() : __c.current());"; do
+    F="$LARK${pair%%|*}"; rest="${pair#*|}"; OLD="${rest%%|*}"; NEW="${rest#*|}"
+    if grep -qF "$OLD" "$F" 2>/dev/null; then
+      cp "$F" "$F$BACKUP_SUFFIX"
+      OLD="$OLD" NEW="$NEW" node - "$F" <<'NODEEOF'
+const fs = require('fs');
+const p = process.argv[2];
+const s = fs.readFileSync(p, 'utf8');
+if (!s.includes(process.env.OLD)) { console.error('[compat] ERROR: pattern not found in ' + p); process.exit(1); }
+fs.writeFileSync(p, s.replace(process.env.OLD, process.env.NEW));
+console.log('[compat] patched call site: ' + p);
+NODEEOF
+    else
+      say "call site already patched: $F"
+    fi
+  done
+done
+
 [[ "$FOUND" == 1 ]] || warn "no installed @larksuite/openclaw-lark found under ~/.openclaw/npm/projects — skipped step 3 (openclaw-side shim is already in place)"
 
 say "done. Restart the gateway to apply:  openclaw gateway restart"
