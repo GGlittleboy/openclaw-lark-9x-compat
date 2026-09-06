@@ -34,7 +34,7 @@ No plugin features are touched — only module resolution.
 ## Usage
 
 ```bash
-git clone https://github.com/<you>/openclaw-lark-9x-compat.git
+git clone https://github.com/GGlittleboy/openclaw-lark-9x-compat.git
 cd openclaw-lark-9x-compat
 ./patch.sh                      # auto-detects the global openclaw install
 openclaw gateway restart
